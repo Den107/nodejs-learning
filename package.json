@@ -1,0 +1,15 @@
+{
+  "name": "nodejs-2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js \"hello wold\" 1 2 3",
+    "start:dev": "node index.js \"hello wold\" 1 2 3"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "colors": "^1.4.0"
+  }
+}
