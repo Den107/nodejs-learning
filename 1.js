@@ -1,35 +1,66 @@
-const { green, yellow, red } = require("colors/safe");
+const http = require("http");
+const path = require("path");
+const fs = require("fs");
 
-const isPrime = (number) => {
-  if (number < 2) return false;
+const HTML = fs.readFileSync("./index.html", "utf-8");
 
-  for (let i = 2; i <= number / 2; i++) {
-    if (number % i === 0) return false;
-  }
+const promisifyFs =
+    (method, error, callback = (data) => data) =>
+        (path) =>
+            new Promise((resolve, reject) => {
+                fs[method](path, (err, data) => {
+                    if (err) {
+                        return reject(error);
+                    }
+                    resolve(callback(data));
+                });
+            });
 
-  return true;
+const readFile = promisifyFs("readFile", "Error when read file");
+const readdir = promisifyFs("readdir", "Error when read dir");
+const isFile = promisifyFs("lstat", "Error when read dir or file", (stats) =>
+    stats.isFile()
+);
+
+const generateHTMLContent = async (dir, path) => {
+    dirName = dir === "/" ? "" : dir + "/";
+    const dirContent = await readdir(path);
+    const listContent = `
+    <ol>
+      ${dirContent
+        .map((item) => `<li><a href="${dirName + item}">${item}</a></li>`)
+        .join("\n")}
+    </ol>
+    `;
+
+    return HTML.replace("{{content}}", listContent);
 };
 
+const server = http.createServer(async (req, res) => {
+    try {
+        if (req.method === "GET") {
+            if (req.url === "/") {
+                const htmlContent = await generateHTMLContent("", __dirname);
+                return res.end(htmlContent);
+            }
 
-let count = 1;
+            const itemPath = path.join(__dirname, req.url);
+            const itemIsFile = await isFile(itemPath);
 
-const from = process.argv[2];
-const to = process.argv[3];
+            if (itemIsFile) {
+                const data = await readFile(itemPath);
+                return res.end(data);
+            }
 
-for (let number = from; number <= to; number++) {
-  let colorer = green;
-
-  if (isPrime(number)) {
-    if (count % 2 === 0) {
-      colorer = yellow;
-      count ++;
-    } else if (count % 3 === 0) {
-      colorer = red;
-      count = 1;
-    } else {
-      count ++;
+            const htmlContent = await generateHTMLContent(req.url, itemPath);
+            return res.end(htmlContent);
+        }
+        res.writeHead(405, "Method not Allowed");
+        res.end();
+    } catch (e) {
+        res.writeHead(400, e);
+        res.end();
     }
+});
 
-    console.log(colorer(number));
-  }
-}
+server.listen(3000);
