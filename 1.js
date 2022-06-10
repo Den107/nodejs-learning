@@ -1,35 +1,43 @@
-const { green, yellow, red } = require("colors/safe");
+const io = require('socket.io')
+const http = require('http')
+const path = require('path')
+const fs = require('fs')
 
-const isPrime = (number) => {
-  if (number < 2) return false;
-
-  for (let i = 2; i <= number / 2; i++) {
-    if (number % i === 0) return false;
-  }
-
-  return true;
-};
-
-
-let count = 1;
-
-const from = process.argv[2];
-const to = process.argv[3];
-
-for (let number = from; number <= to; number++) {
-  let colorer = green;
-
-  if (isPrime(number)) {
-    if (count % 2 === 0) {
-      colorer = yellow;
-      count ++;
-    } else if (count % 3 === 0) {
-      colorer = red;
-      count = 1;
+const app = http.createServer((request, response) => {
+    if (request.method === 'GET') {
+        const filePath = path.join(__dirname, 'index.html')
+       let readStream = fs.createReadStream(filePath)
+        readStream.pipe(response)
+    } else if (request.method === 'POST') {
+        let data = ''
+        request.on('data', chunk => {
+            data += chunk
+        })
+        request.on('end', () => {
+            const parsedData = JSON.parse(data)
+            console.log(parsedData)
+            response.writeHead(200, { 'Content-Type': 'json'})
+            response.end(data)
+        })
     } else {
-      count ++;
+        response.statusCode = 405
+        response.end()
     }
+})
 
-    console.log(colorer(number));
-  }
-}
+const socket = io(app);
+socket.on('connection', function (socket) {
+    console.log('New connection');
+    socket.broadcast.emit('NEW_CONN_EVENT', { msg: 'The new client connected' })
+    socket.on('CLIENT_MSG', (data) => {
+        socket.emit('SERVER_MSG', { msg: data.msg.split('').reverse().join('')})
+    })
+    socket.on("disconnecting", (reason) => {
+        for (const room of socket.rooms) {
+            if (room !== socket.id) {
+                socket.to(room).emit("user has left", socket.id)
+            }
+        }
+    })
+})
+app.listen(3000, 'localhost')
